@@ -6,8 +6,8 @@ app.use(cors());
 
 const PORT = 3000;
 
-const CLIENT_ID = process.env.CLIENT_ID;
-const CLIENT_SECRET = process.env.CLIENT_SECRET;
+const CLIENT_ID = process.env.AMADEUS_CLIENT_ID;
+const CLIENT_SECRET = process.env.AMADEUS_CLIENT_SECRET;
 
 let accessToken = null;
 
