@@ -81,7 +81,7 @@ app.get("/airports", async (req, res) => {
     const tokenData = await tokenResponse.json();
 
     const response = await fetch(
-      `https://test.api.amadeus.com/v1/reference-data/locations?subType=CITY,AIRPORT&keyword=${encodeURIComponent(keyword)}`,
+      `https://test.api.amadeus.com/v1/reference-data/locations?subType=CITY,AIRPORT&keyword=${encodeURIComponent(keyword)}&countryCode=UZ`,
       {
         headers: {
           Authorization: `Bearer ${tokenData.access_token}`,
