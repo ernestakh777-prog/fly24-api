@@ -55,6 +55,46 @@ app.get("/flights", async (req, res) => {
   res.json(data);
 });
 
+app.get("/airports", async (req, res) => {
+  try {
+    const keyword = req.query.keyword;
+
+    if (!keyword || keyword.trim().length < 2) {
+      return res.json({ data: [] });
+    }
+
+    const tokenResponse = await fetch(
+      "https://test.api.amadeus.com/v1/security/oauth2/token",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body:
+          "grant_type=client_credentials&client_id=" +
+          CLIENT_ID +
+          "&client_secret=" +
+          CLIENT_SECRET,
+      }
+    );
+
+    const tokenData = await tokenResponse.json();
+
+    const response = await fetch(
+      `https://test.api.amadeus.com/v1/reference-data/locations?subType=CITY,AIRPORT&keyword=${encodeURIComponent(keyword)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${tokenData.access_token}`,
+        },
+      }
+    );
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 app.listen(PORT, () => {
   console.log("Server running on port " + PORT);
 });
