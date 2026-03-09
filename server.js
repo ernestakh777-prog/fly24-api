@@ -60,7 +60,7 @@ app.get("/airports", async (req, res) => {
     const keyword = req.query.keyword;
 
     if (!keyword || keyword.trim().length < 2) {
-      return res.json({ data: [] });
+      return res.json([]);
     }
 
     const tokenResponse = await fetch(
@@ -90,7 +90,16 @@ app.get("/airports", async (req, res) => {
     );
 
     const data = await response.json();
-    res.json(data);
+
+    const formatted = (data.data || []).map((item) => ({
+      iata: item.iataCode || "",
+      name: item.name || "",
+      city: item.address?.cityName || "",
+      country: item.address?.countryName || "",
+      subtype: item.subType || "",
+    }));
+
+    res.json(formatted);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
