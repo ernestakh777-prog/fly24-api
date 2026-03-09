@@ -32,27 +32,40 @@ async function getToken() {
 }
 
 app.get("/flights", async (req, res) => {
-  const { origin, destination, date } = req.query;
+  try {
+    const { origin, destination, date, returnDate, adults } = req.query;
 
-  if (!accessToken) {
-    await getToken();
+    if (!origin || !destination || !date) {
+      return res.status(400).json({ error: "origin, destination, date are required" });
+    }
+
+    if (!accessToken) {
+      await getToken();
+    }
+
+    let url =
+      `https://test.api.amadeus.com/v2/shopping/flight-offers` +
+      `?originLocationCode=${origin}` +
+      `&destinationLocationCode=${destination}` +
+      `&departureDate=${date}` +
+      `&adults=${adults || 1}` +
+      `&max=12`;
+
+    if (returnDate) {
+      url += `&returnDate=${returnDate}`;
+    }
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-
-  const url =
-    `https://test.api.amadeus.com/v2/shopping/flight-offers` +
-    `?originLocationCode=${origin}` +
-    `&destinationLocationCode=${destination}` +
-    `&departureDate=${date}` +
-    `&adults=1&max=5`;
-
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  const data = await response.json();
-  res.json(data);
 });
 const AIRPORTS = [
   {
