@@ -91,18 +91,20 @@ app.get("/airports", async (req, res) => {
 
     const data = await response.json();
 
-    const formatted = (data.data || []).map((item) => ({
-      iata: item.iataCode || "",
-      name: item.name || "",
-      city: item.address?.cityName || "",
-      country: item.address?.countryName || "",
-      subtype: item.subType || "",
-    }));
+    const formatted = (data.data || [])
+  .filter((item) => item.subType === "AIRPORT")
+  .map((item) => ({
+    iata: item.iataCode || "",
+    name: item.name || "",
+    city: item.address?.cityName || "",
+    country: item.address?.countryName || "",
+    subtype: item.subType || "",
+  }));
 
-    res.json(formatted);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+res.json(formatted);
+} catch (error) {
+  res.status(500).json({ error: error.message });
+}
 });
 app.listen(PORT, () => {
   console.log("Server running on port " + PORT);
