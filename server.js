@@ -33,7 +33,7 @@ async function getToken() {
 
 app.get("/flights", async (req, res) => {
   try {
-    const { origin, destination, date, returnDate, adults } = req.query;
+    const { origin, destination, date, returnDate, adults, travelClass } = req.query;
 
     if (!origin || !destination || !date) {
       return res.status(400).json({ error: "origin, destination, date are required" });
@@ -53,6 +53,10 @@ app.get("/flights", async (req, res) => {
 
     if (returnDate) {
       url += `&returnDate=${returnDate}`;
+    }
+
+    if (travelClass) {
+      url += `&travelClass=${travelClass}`;
     }
 
     const response = await fetch(url, {
