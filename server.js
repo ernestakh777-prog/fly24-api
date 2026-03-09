@@ -95,7 +95,7 @@ app.get("/airports", async (req, res) => {
   .filter((item) => item.subType === "AIRPORT" && item.address?.countryCode === "UZ")
   .map((item) => ({
     iata: item.iataCode || "",
-    name: item.name || "",
+    name: `${item.address?.cityName || item.name || ""} (${item.iataCode || ""})`,
     city: item.address?.cityName || "",
     country: item.address?.countryName || "",
     subtype: item.subType || "",
