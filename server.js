@@ -1,10 +1,11 @@
 const express = require("express");
+const fetch = require("node-fetch");
 const cors = require("cors");
 
 const app = express();
 app.use(cors());
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 const CLIENT_ID = process.env.AMADEUS_CLIENT_ID;
 const CLIENT_SECRET = process.env.AMADEUS_CLIENT_SECRET;
