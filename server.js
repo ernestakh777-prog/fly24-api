@@ -92,7 +92,7 @@ app.get("/airports", async (req, res) => {
     const data = await response.json();
 
     const formatted = (data.data || [])
-  .filter((item) => item.subType === "AIRPORT")
+  .filter((item) => item.subType === "AIRPORT" && item.address?.countryCode === "UZ")
   .map((item) => ({
     iata: item.iataCode || "",
     name: item.name || "",
