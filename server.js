@@ -57,9 +57,9 @@ app.get("/flights", async (req, res) => {
 
 app.get("/airports", async (req, res) => {
   try {
-    const keyword = req.query.keyword;
+    const keyword = (req.query.keyword || "").trim();
 
-    if (!keyword || keyword.trim().length < 2) {
+    if (!keyword || keyword.length < 2) {
       return res.json([]);
     }
 
@@ -81,7 +81,7 @@ app.get("/airports", async (req, res) => {
     const tokenData = await tokenResponse.json();
 
     const response = await fetch(
-      `https://test.api.amadeus.com/v1/reference-data/locations?subType=CITY,AIRPORT&keyword=${encodeURIComponent(keyword)}&countryCode=UZ`,
+      `https://test.api.amadeus.com/v1/reference-data/locations?subType=CITY,AIRPORT&keyword=${encodeURIComponent(keyword)}`,
       {
         headers: {
           Authorization: `Bearer ${tokenData.access_token}`,
@@ -90,21 +90,42 @@ app.get("/airports", async (req, res) => {
     );
 
     const data = await response.json();
+    const q = keyword.toLowerCase();
 
     const formatted = (data.data || [])
-  .filter((item) => item.subType === "AIRPORT" && item.address?.countryCode === "UZ")
-  .map((item) => ({
-    iata: item.iataCode || "",
-    name: `${item.address?.cityName || item.name || ""} (${item.iataCode || ""})`,
-    city: item.address?.cityName || "",
-    country: item.address?.countryName || "",
-    subtype: item.subType || "",
-  }));
+      .map((item) => ({
+        iata: item.iataCode || "",
+        name: item.name || "",
+        city: item.address?.cityName || "",
+        country: item.address?.countryName || "",
+        subtype: item.subType || "",
+      }))
+      .filter((item) => {
+        const text = `${item.name} ${item.city} ${item.iata}`.toLowerCase();
+        return text.includes(q);
+      })
+      .sort((a, b) => {
+        const aText = `${a.name} ${a.city} ${a.iata}`.toLowerCase();
+        const bText = `${b.name} ${b.city} ${b.iata}`.toLowerCase();
 
-res.json(formatted);
-} catch (error) {
-  res.status(500).json({ error: error.message });
-}
+        const aStarts = aText.startsWith(q) ? 1 : 0;
+        const bStarts = bText.startsWith(q) ? 1 : 0;
+
+        return bStarts - aStarts;
+      })
+      .slice(0, 8)
+      .map((item) => ({
+        iata: item.iata,
+        name: `${item.city || item.name} (${item.iata})`,
+        city: item.city,
+        country: item.country,
+        subtype: item.subtype,
+      }));
+
+    res.json(formatted);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 app.listen(PORT, () => {
   console.log("Server running on port " + PORT);
