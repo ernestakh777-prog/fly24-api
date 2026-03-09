@@ -6,8 +6,8 @@ app.use(cors());
 
 const PORT = 3000;
 
-const CLIENT_ID = "GPLs2EJHBWrE8UT4fbmUpHWxgEAJzacX";
-const CLIENT_SECRET = "tAX9BHGKdD3u3JZy";
+const CLIENT_ID = process.env.CLIENT_ID;
+const CLIENT_SECRET = process.env.CLIENT_SECRET;
 
 let accessToken = null;
 
