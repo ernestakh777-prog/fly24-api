@@ -262,40 +262,229 @@ const AIRPORTS = [
     country_ru: "Россия"
   }
 ];
+const CITY_RU_MAP = {
+  tashkent: "Ташкент",
+  samarkand: "Самарканд",
+  bukhara: "Бухара",
+  urgench: "Ургенч",
+  fergana: "Фергана",
+  namangan: "Наманган",
+  andijan: "Андижан",
+  navoi: "Навои",
+  istanbul: "Стамбул",
+  antalya: "Анталья",
+  dubai: "Дубай",
+  sharjah: "Шарджа",
+  "abu dhabi": "Абу-Даби",
+  almaty: "Алматы",
+  astana: "Астана",
+  bishkek: "Бишкек",
+  moscow: "Москва",
+  "saint petersburg": "Санкт-Петербург",
+  london: "Лондон",
+  paris: "Париж",
+  rome: "Рим",
+  milan: "Милан",
+  berlin: "Берлин",
+  frankfurt: "Франкфурт",
+  vienna: "Вена",
+  prague: "Прага",
+  tbilisi: "Тбилиси",
+  baku: "Баку",
+  delhi: "Дели",
+  jeddah: "Джидда",
+  riyadh: "Эр-Рияд",
+  doha: "Доха",
+  bangkok: "Бангкок",
+  singapore: "Сингапур",
+  "kuala lumpur": "Куала-Лумпур",
+  beijing: "Пекин",
+  guangzhou: "Гуанчжоу",
+  seoul: "Сеул",
+  tokyo: "Токио"
+};
+
+const COUNTRY_RU_MAP = {
+  uzbekistan: "Узбекистан",
+  turkey: "Турция",
+  russia: "Россия",
+  uae: "ОАЭ",
+  "united arab emirates": "ОАЭ",
+  kazakhstan: "Казахстан",
+  kyrgyzstan: "Кыргызстан",
+  azerbaijan: "Азербайджан",
+  georgia: "Грузия",
+  india: "Индия",
+  "saudi arabia": "Саудовская Аравия",
+  qatar: "Катар",
+  thailand: "Таиланд",
+  singapore: "Сингапур",
+  malaysia: "Малайзия",
+  china: "Китай",
+  germany: "Германия",
+  france: "Франция",
+  italy: "Италия",
+  austria: "Австрия",
+  czechia: "Чехия",
+  "united kingdom": "Великобритания",
+  uk: "Великобритания"
+};
+
+function translitRuToLat(text = "") {
+  const map = {
+    а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh", з: "z",
+    и: "i", й: "y", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r",
+    с: "s", т: "t", у: "u", ф: "f", х: "kh", ц: "ts", ч: "ch", ш: "sh",
+    щ: "shch", ъ: "", ы: "y", ь: "", э: "e", ю: "yu", я: "ya"
+  };
+
+  return text
+    .toLowerCase()
+    .split("")
+    .map((ch) => map[ch] !== undefined ? map[ch] : ch)
+    .join("");
+}
+
+function normalizeText(text = "") {
+  return text.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function getRuCity(cityEn = "") {
+  const key = normalizeText(cityEn);
+  return CITY_RU_MAP[key] || cityEn;
+}
+
+function getRuCountry(countryEn = "") {
+  const key = normalizeText(countryEn);
+  return COUNTRY_RU_MAP[key] || countryEn;
+}
+
+function scoreAirport(item, query) {
+  const city = normalizeText(item.city || "");
+  const name = normalizeText(item.name || "");
+  const airport = normalizeText(item.airport || "");
+  const iata = normalizeText(item.iata || "");
+  const q = normalizeText(query);
+
+  let score = 0;
+  if (iata === q) score += 100;
+  if (city.startsWith(q)) score += 50;
+  if (name.startsWith(q)) score += 40;
+  if (airport.startsWith(q)) score += 25;
+  if (city.includes(q)) score += 20;
+  if (name.includes(q)) score += 15;
+  if (airport.includes(q)) score += 10;
+
+  return score;
+}
+
+function dedupeAirports(items = []) {
+  const map = new Map();
+
+  items.forEach((item) => {
+    const key = `${item.iata}_${item.name}_${item.city}`;
+    if (!map.has(key)) {
+      map.set(key, item);
+    }
+  });
+
+  return Array.from(map.values());
+}
+
 app.get("/airports", async (req, res) => {
-  const keyword = (req.query.keyword || "").trim().toLowerCase();
-  const lang = (req.query.lang || "ru").toLowerCase();
+  try {
+    const keyword = (req.query.keyword || "").trim();
+    const lang = (req.query.lang || "ru").toLowerCase();
 
-  if (!keyword || keyword.length < 2) {
-    return res.json([]);
+    if (!keyword || keyword.length < 2) {
+      return res.json([]);
+    }
+
+    const searchQuery = translitRuToLat(keyword);
+    const q = normalizeText(keyword);
+    const qLat = normalizeText(searchQuery);
+
+    const localMatches = (AIRPORTS || [])
+      .map((item) => ({
+        iata: item.iata,
+        name: lang === "en"
+          ? `${item.city_en} (${item.iata})`
+          : `${item.city_ru} (${item.iata})`,
+        city: lang === "en" ? item.city_en : item.city_ru,
+        country: lang === "en" ? item.country_en : item.country_ru,
+        airport: lang === "en" ? item.name_en : item.name_ru
+      }))
+      .filter((item) => {
+        const text = normalizeText(
+          `${item.iata} ${item.name} ${item.city} ${item.country} ${item.airport}`
+        );
+        return text.includes(q) || text.includes(qLat);
+      });
+
+    if (!accessToken) {
+      await getToken();
+    }
+
+    let amadeusItems = [];
+
+    try {
+      const url =
+        `https://test.api.amadeus.com/v1/reference-data/locations` +
+        `?subType=CITY,AIRPORT` +
+        `&keyword=${encodeURIComponent(searchQuery)}` +
+        `&page[limit]=12`;
+
+      let response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (response.status === 401) {
+        await getToken();
+        response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+      }
+
+      const data = await response.json();
+
+      amadeusItems = (data.data || []).map((item) => {
+        const cityEn = item.address?.cityName || item.name || "";
+        const countryEn = item.address?.countryName || "";
+        const iata = item.iataCode || item.id || "";
+
+        return {
+          iata,
+          name: lang === "en"
+            ? `${cityEn} (${iata})`
+            : `${getRuCity(cityEn)} (${iata})`,
+          city: lang === "en" ? cityEn : getRuCity(cityEn),
+          country: lang === "en" ? countryEn : getRuCountry(countryEn),
+          airport: lang === "en"
+            ? (item.name || cityEn)
+            : getRuCity(item.name || cityEn)
+        };
+      });
+    } catch (e) {
+      amadeusItems = [];
+    }
+
+    const merged = dedupeAirports([...localMatches, ...amadeusItems])
+      .map((item) => ({
+        ...item,
+        _score: scoreAirport(item, keyword) + scoreAirport(item, searchQuery)
+      }))
+      .sort((a, b) => b._score - a._score)
+      .slice(0, 10)
+      .map(({ _score, ...item }) => item);
+
+    res.json(merged);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-
-  const results = AIRPORTS
-    .filter((item) => {
-      const haystack = `
-        ${item.iata}
-        ${item.city_en}
-        ${item.city_ru}
-        ${item.name_en}
-        ${item.name_ru}
-        ${item.country_en}
-        ${item.country_ru}
-      `.toLowerCase();
-
-      return haystack.includes(keyword);
-    })
-    .slice(0, 8)
-    .map((item) => ({
-      iata: item.iata,
-      name: lang === "en"
-        ? `${item.city_en} (${item.iata})`
-        : `${item.city_ru} (${item.iata})`,
-      city: lang === "en" ? item.city_en : item.city_ru,
-      country: lang === "en" ? item.country_en : item.country_ru,
-      airport: lang === "en" ? item.name_en : item.name_ru
-    }));
-
-  res.json(results);
 });
 app.listen(PORT, () => {
   console.log("Server running on port " + PORT);
