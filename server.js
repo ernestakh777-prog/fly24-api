@@ -460,6 +460,112 @@ function getSearchVariants(keyword = "") {
 
   return Array.from(variants).filter(Boolean);
 }
+app.get("/airports", async (req, res) => {
+  try {
+    const keyword = (req.query.keyword || "").trim();
+    const lang = (req.query.lang || "ru").toLowerCase();
+
+    if (!keyword || keyword.length < 2) {
+      return res.json([]);
+    }
+
+    const searchVariants = getSearchVariants(keyword);
+    const searchQuery = searchVariants[0] || translitRuToLat(keyword);
+    const q = normalizeText(keyword);
+    const qLat = normalizeText(searchQuery);
+
+    const localMatches = (AIRPORTS || [])
+      .map((item) => ({
+        iata: item.iata,
+        name:
+          lang === "en"
+            ? `${item.city_en} (${item.iata})`
+            : `${item.city_ru} (${item.iata})`,
+        city: lang === "en" ? item.city_en : item.city_ru,
+        country: lang === "en" ? item.country_en : item.country_ru,
+        airport: lang === "en" ? item.name_en : item.name_ru
+      }))
+      .filter((item) => {
+        const text = normalizeText(
+          `${item.iata} ${item.name} ${item.city} ${item.country} ${item.airport}`
+        );
+        return text.includes(q) || text.includes(qLat);
+      });
+
+    if (!accessToken) {
+      await getToken();
+    }
+
+    let amadeusItems = [];
+
+    try {
+      for (const variant of searchVariants) {
+        const url =
+          `https://test.api.amadeus.com/v1/reference-data/locations` +
+          `?subType=CITY,AIRPORT` +
+          `&keyword=${encodeURIComponent(variant)}` +
+          `&page[limit]=12`;
+
+        let response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+
+        if (response.status === 401) {
+          await getToken();
+
+          response = await fetch(url, {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          });
+        }
+
+        const data = await response.json();
+
+        const mapped = (data.data || []).map((item) => {
+          const cityEn = item.address?.cityName || item.name || "";
+          const countryEn = item.address?.countryName || "";
+          const iata = item.iataCode || item.id || "";
+
+          return {
+            iata,
+            name:
+              lang === "en"
+                ? `${cityEn} (${iata})`
+                : `${getRuCity(cityEn)} (${iata})`,
+            city: lang === "en" ? cityEn : getRuCity(cityEn),
+            country: lang === "en" ? countryEn : getRuCountry(countryEn),
+            airport: lang === "en"
+              ? (item.name || cityEn)
+              : (item.name || cityEn)
+          };
+        });
+
+        if (mapped.length > 0) {
+          amadeusItems = mapped;
+          break;
+        }
+      }
+    } catch (e) {
+      amadeusItems = [];
+    }
+
+    const merged = dedupeAirports([...localMatches, ...amadeusItems])
+      .map((item) => ({
+        ...item,
+        _score: scoreAirport(item, keyword) + scoreAirport(item, searchQuery)
+      }))
+      .sort((a, b) => b._score - a._score)
+      .slice(0, 10)
+      .map(({ _score, ...item }) => item);
+
+    res.json(merged);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 app.listen(PORT, () => {
   console.log("Server running on port " + PORT);
 });
