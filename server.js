@@ -391,101 +391,75 @@ function dedupeAirports(items = []) {
   return Array.from(map.values());
 }
 
-app.get("/airports", async (req, res) => {
-  try {
-    const keyword = (req.query.keyword || "").trim();
-    const lang = (req.query.lang || "ru").toLowerCase();
+const CITY_SEARCH_ALIASES = {
+  "лонд": "london",
+  "лондон": "london",
+  "пари": "paris",
+  "париж": "paris",
+  "рим": "rome",
+  "милан": "milan",
+  "берлин": "berlin",
+  "франк": "frankfurt",
+  "франкфурт": "frankfurt",
+  "вена": "vienna",
+  "праг": "prague",
+  "джид": "jeddah",
+  "джидд": "jeddah",
+  "джед": "jeddah",
+  "джедда": "jeddah",
+  "рияд": "riyadh",
+  "доха": "doha",
+  "банг": "bangkok",
+  "бангкок": "bangkok",
+  "синг": "singapore",
+  "сингапур": "singapore",
+  "куала": "kuala lumpur",
+  "пекин": "beijing",
+  "гуанч": "guangzhou",
+  "сеул": "seoul",
+  "токио": "tokyo",
+  "стам": "istanbul",
+  "антал": "antalya",
+  "дуба": "dubai",
+  "шард": "sharjah",
+  "абу": "abu dhabi",
+  "алмат": "almaty",
+  "астан": "astana",
+  "бишк": "bishkek",
+  "моск": "moscow",
+  "питер": "saint petersburg",
+  "санкт": "saint petersburg",
+  "дели": "delhi",
+  "баку": "baku",
+  "тбил": "tbilisi"
+};
 
-    if (!keyword || keyword.length < 2) {
-      return res.json([]);
-    }
+function getSearchVariants(keyword = "") {
+  const normalized = normalizeText(keyword);
+  const translit = normalizeText(translitRuToLat(keyword));
 
-    const searchQuery = translitRuToLat(keyword);
-    const q = normalizeText(keyword);
-    const qLat = normalizeText(searchQuery);
+  const variants = new Set();
 
-    const localMatches = (AIRPORTS || [])
-      .map((item) => ({
-        iata: item.iata,
-        name: lang === "en"
-          ? `${item.city_en} (${item.iata})`
-          : `${item.city_ru} (${item.iata})`,
-        city: lang === "en" ? item.city_en : item.city_ru,
-        country: lang === "en" ? item.country_en : item.country_ru,
-        airport: lang === "en" ? item.name_en : item.name_ru
-      }))
-      .filter((item) => {
-        const text = normalizeText(
-          `${item.iata} ${item.name} ${item.city} ${item.country} ${item.airport}`
-        );
-        return text.includes(q) || text.includes(qLat);
-      });
+  if (normalized) variants.add(normalized);
+  if (translit) variants.add(translit);
 
-    if (!accessToken) {
-      await getToken();
-    }
-
-    let amadeusItems = [];
-
-    try {
-      const url =
-        `https://test.api.amadeus.com/v1/reference-data/locations` +
-        `?subType=CITY,AIRPORT` +
-        `&keyword=${encodeURIComponent(searchQuery)}` +
-        `&page[limit]=12`;
-
-      let response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      if (response.status === 401) {
-        await getToken();
-        response = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        });
-      }
-
-      const data = await response.json();
-
-      amadeusItems = (data.data || []).map((item) => {
-        const cityEn = item.address?.cityName || item.name || "";
-        const countryEn = item.address?.countryName || "";
-        const iata = item.iataCode || item.id || "";
-
-        return {
-          iata,
-          name: lang === "en"
-            ? `${cityEn} (${iata})`
-            : `${getRuCity(cityEn)} (${iata})`,
-          city: lang === "en" ? cityEn : getRuCity(cityEn),
-          country: lang === "en" ? countryEn : getRuCountry(countryEn),
-          airport: lang === "en"
-            ? (item.name || cityEn)
-            : getRuCity(item.name || cityEn)
-        };
-      });
-    } catch (e) {
-      amadeusItems = [];
-    }
-
-    const merged = dedupeAirports([...localMatches, ...amadeusItems])
-      .map((item) => ({
-        ...item,
-        _score: scoreAirport(item, keyword) + scoreAirport(item, searchQuery)
-      }))
-      .sort((a, b) => b._score - a._score)
-      .slice(0, 10)
-      .map(({ _score, ...item }) => item);
-
-    res.json(merged);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  if (CITY_SEARCH_ALIASES[normalized]) {
+    variants.add(CITY_SEARCH_ALIASES[normalized]);
   }
-});
+
+  for (const [key, value] of Object.entries(CITY_SEARCH_ALIASES)) {
+    if (normalized.startsWith(key) || key.startsWith(normalized)) {
+      variants.add(value);
+    }
+  }
+
+  // короткий fallback для Amadeus
+  if (translit.length >= 3) {
+    variants.add(translit.slice(0, 3));
+  }
+
+  return Array.from(variants).filter(Boolean);
+}
 app.listen(PORT, () => {
   console.log("Server running on port " + PORT);
 });
